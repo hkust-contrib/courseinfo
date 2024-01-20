@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,8 +18,10 @@ var (
 )
 
 type Course struct {
-	Code  string `json:"code"`
-	Title string `json:"title"`
+	Code        string   `json:"code"`
+	Title       string   `json:"title"`
+	Instructors []string `json:"instructors"`
+	Sections    []string `json:"sections"`
 }
 
 type app struct {
@@ -55,8 +58,19 @@ func (a *app) defineCrawlingRules() {
 		a.logger.Info("Caching result for", "courseCode", courseCode, "courseTitle", courseTitle)
 		code := strings.ReplaceAll(courseCode, " ", "")
 		course := &Course{
-			Code:  code,
-			Title: courseTitle[0:strings.Index(courseTitle, " (")],
+			Code:        code,
+			Title:       courseTitle[0:strings.Index(courseTitle, " (")],
+			Instructors: []string{},
+		}
+		for _, name := range e.ChildTexts("a") {
+			if !slices.Contains(course.Instructors, name) && name != "" {
+				course.Instructors = append(course.Instructors, name)
+			}
+		}
+		for _, section := range e.ChildTexts(".newsect > td:nth-child(1)") {
+			if !slices.Contains(course.Sections, section) && section != "" {
+				course.Sections = append(course.Sections, section[0:strings.Index(section, " (")])
+			}
 		}
 		a.remember(code, course)
 	})
@@ -80,7 +94,7 @@ func main() {
 	a := NewApp(logger)
 	a.routes()
 	a.defineCrawlingRules()
-	a.crawler.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+	// a.crawler.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: a.router,
