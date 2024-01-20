@@ -4,25 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"runtime"
-	"runtime/debug"
-	"time"
 
 	"github.com/gorilla/mux"
 )
 
 type healthzResponse struct {
 	Status string `json:"status"`
-}
-
-type buildInfo struct {
-	Runtime     string `json:"runtime"`
-	Hostname    string `json:"hostname"`
-	Platform    string `json:"platform"`
-	BuildCommit string `json:"buildCommit"`
-	BuildDate   string `json:"buildDate"`
-	Uptime      string `json:"uptime"`
 }
 
 func writeResponseBody(w http.ResponseWriter, status int, v any) error {
@@ -36,40 +23,16 @@ func (a *app) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) HandleIntrospection(w http.ResponseWriter, r *http.Request) {
-	{
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "localhost"
-		}
-		writeResponseBody(w, http.StatusOK, &buildInfo{
-			Platform: fmt.Sprintf("%v %v", runtime.GOOS, runtime.GOARCH),
-			Runtime:  runtime.Version(),
-			Hostname: hostname,
-			BuildCommit: func() string {
-				if info, ok := debug.ReadBuildInfo(); ok {
-					for _, setting := range info.Settings {
-						if setting.Key == "vcs.revision" {
-							return setting.Value
-						}
-					}
-				}
-
-				return "n/a"
-			}(),
-			BuildDate: func() string {
-				if info, ok := debug.ReadBuildInfo(); ok {
-					for _, setting := range info.Settings {
-						if setting.Key == "vcs.time" {
-							return setting.Value
-						}
-					}
-				}
-
-				return "n/a"
-			}(),
-			Uptime: fmt.Sprintf("%.2f", time.Since(a.startedAt).Seconds()),
+	m, err := a.manifest.MarshalJSON()
+	if err != nil {
+		writeResponseBody(w, http.StatusInternalServerError, healthzResponse{
+			Status: "error",
 		})
+		return
 	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	w.Write(m)
 }
 
 func (a *app) HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
