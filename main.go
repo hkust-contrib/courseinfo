@@ -190,7 +190,7 @@ func main() {
 	a := NewApp(logger)
 	a.routes()
 	a.defineCrawlingRules()
-	// a.crawler.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+	a.crawler.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: a.router,
