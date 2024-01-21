@@ -48,9 +48,16 @@ func (a *app) HandleGetSemester(w http.ResponseWriter, r *http.Request) {
 	if vars["semester"] != "current" {
 		s, err := a.parseSemester(vars["semester"])
 		if err != nil {
-			writeResponseBody(w, http.StatusInternalServerError, healthzResponse{
-				Status: "error",
-			})
+			if err.Error() == "invalid semester code" {
+				writeResponseBody(w, http.StatusBadRequest, healthzResponse{
+					Status: "error",
+				})
+				return
+			} else {
+				writeResponseBody(w, http.StatusInternalServerError, healthzResponse{
+					Status: "error",
+				})
+			}
 			return
 		}
 		writeResponseBody(w, http.StatusOK, s)
