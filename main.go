@@ -41,12 +41,13 @@ type buildInfo struct {
 }
 
 type app struct {
-	endpoint string
-	cache    map[string]*Course
-	router   *mux.Router
-	crawler  *colly.Collector
-	logger   *slog.Logger
-	manifest *buildInfo
+	endpoint        string
+	cache           map[string]*Course
+	departmentCache []string
+	router          *mux.Router
+	crawler         *colly.Collector
+	logger          *slog.Logger
+	manifest        *buildInfo
 }
 
 func (b *buildInfo) Uptime() string {
@@ -123,12 +124,13 @@ func NewApp(logger *slog.Logger) *app {
 	}
 	router := mux.NewRouter()
 	return &app{
-		endpoint: fmt.Sprintf("%s/%s", baseURL, currentSemester),
-		router:   router,
-		cache:    make(map[string]*Course),
-		crawler:  colly.NewCollector(),
-		logger:   logger,
-		manifest: manifest,
+		endpoint:        fmt.Sprintf("%s/%s", baseURL, currentSemester),
+		router:          router,
+		cache:           make(map[string]*Course),
+		departmentCache: []string{},
+		crawler:         colly.NewCollector(),
+		logger:          logger,
+		manifest:        manifest,
 	}
 }
 
@@ -156,13 +158,19 @@ func (a *app) defineCrawlingRules() {
 	})
 	a.crawler.OnHTML("a[class=ug]", func(e *colly.HTMLElement) {
 		department := e.Text
-		a.logger.Info("Traversing courses for", "department", department)
-		a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+		if !slices.Contains(a.departmentCache, department) {
+			a.logger.Info("Traversing courses for", "department", department)
+			a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.departmentCache = append(a.departmentCache, department)
+		}
 	})
 	a.crawler.OnHTML("a[class=pg]", func(e *colly.HTMLElement) {
 		department := e.Text
-		a.logger.Info("Traversing courses for", "department", department)
-		a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+		if !slices.Contains(a.departmentCache, department) {
+			a.logger.Info("Traversing courses for", "department", department)
+			a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.departmentCache = append(a.departmentCache, department)
+		}
 	})
 	a.logger.Info("Crawler parsing and traversing rules established")
 }
