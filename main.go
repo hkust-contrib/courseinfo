@@ -16,6 +16,7 @@ import (
 
 	"github.com/gocolly/colly/v2"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 var (
@@ -118,6 +119,7 @@ func NewApp(logger *slog.Logger) *app {
 	logger.Info("Initializing application...")
 	e := echo.New()
 	e.HideBanner = true
+	e.Pre(middleware.RemoveTrailingSlash())
 	currentSemester, err := getCurrentSemesterCode(logger)
 	if err != nil {
 		logger.Error("error while getting current semester code", err)

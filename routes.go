@@ -13,7 +13,7 @@ func (a *app) routes() {
 		return c.Redirect(http.StatusMovedPermanently, "/v1")
 	})
 	group := a.server.Group("/v1")
-	group.GET("/", a.HandleIntrospection)
+	group.GET("", a.HandleIntrospection)
 	group.GET("/semesters/:semester", a.HandleGetSemester)
 	group.GET("/courses/:course", a.HandleGetCourse)
 	group.GET("/courses", a.HandleGetCourses)

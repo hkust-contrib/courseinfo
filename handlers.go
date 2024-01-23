@@ -28,7 +28,7 @@ func (a *app) HandleIntrospection(c echo.Context) error {
 		})
 		return err
 	}
-	c.JSON(http.StatusOK, m)
+	c.JSONBlob(http.StatusOK, m)
 	return nil
 }
 
