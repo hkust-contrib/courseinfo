@@ -1,12 +1,21 @@
 package main
 
+import (
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+)
+
 func (a *app) routes() {
 	a.logger.Info("Setting up route handlers")
-	a.router.HandleFunc("/", a.HandleRedirect).Methods("GET")
-	a.router.HandleFunc("/v1", a.HandleIntrospection).Methods("GET")
-	a.router.HandleFunc("/healthz", a.HandleHealthCheck).Methods("GET")
-	a.router.HandleFunc("/v1/semesters/{semester}", a.HandleGetSemester).Methods("GET")
-	a.router.HandleFunc("/v1/courses/{course}", a.HandleGetCourse).Methods("GET")
-	a.router.HandleFunc("/v1/courses", a.HandleGetCourses).Methods("GET")
-	a.router.HandleFunc("/v1/courses", a.HandleRefreshCourses).Methods("PATCH")
+	a.server.GET("/healthz", a.HandleHealthCheck)
+	a.server.GET("/", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/v1")
+	})
+	group := a.server.Group("/v1")
+	group.GET("/", a.HandleIntrospection)
+	group.GET("/semesters/:semester", a.HandleGetSemester)
+	group.GET("/courses/:course", a.HandleGetCourse)
+	group.GET("/courses", a.HandleGetCourses)
+	group.PATCH("/courses", a.HandleRefreshCourses)
 }

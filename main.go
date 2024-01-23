@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 )
 
 var (
@@ -44,7 +44,7 @@ type app struct {
 	endpoint        string
 	cache           map[string]*Course
 	departmentCache []string
-	router          *mux.Router
+	server          *echo.Echo
 	logger          *slog.Logger
 	manifest        *buildInfo
 }
@@ -116,15 +116,16 @@ func NewApp(logger *slog.Logger) *app {
 	manifest := Manifest()
 	fmt.Print(manifest.String())
 	logger.Info("Initializing application...")
+	e := echo.New()
+	e.HideBanner = true
 	currentSemester, err := getCurrentSemesterCode(logger)
 	if err != nil {
 		logger.Error("error while getting current semester code", err)
 		os.Exit(1)
 	}
-	router := mux.NewRouter()
 	return &app{
 		endpoint:        fmt.Sprintf("%s/%s", baseURL, currentSemester),
-		router:          router,
+		server:          e,
 		cache:           make(map[string]*Course),
 		departmentCache: []string{},
 		logger:          logger,
@@ -137,13 +138,13 @@ func (a *app) remember(courseCode string, c *Course) {
 	a.logger.Info("In-memory cache updated for", "courseCode", courseCode)
 }
 
-func handleInterrupt(logger *slog.Logger, server *http.Server) {
+func handleInterrupt(logger *slog.Logger, a *app) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := a.server.Shutdown(ctx); err != nil {
 		logger.Error("Server Shutdown: ", err)
 	}
 	logger.Info("Shutting down...")
@@ -189,17 +190,13 @@ func main() {
 	a := NewApp(logger)
 	a.routes()
 	PreCacheCurrentSemesterCourses(a, logger)
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: a.router,
-	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handleInterrupt(logger, server)
+		handleInterrupt(logger, a)
 	}()
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	if err := a.server.Start(":8080"); err != http.ErrServerClosed {
 		logger.Error("An unexpected error has occured", err)
 	}
 	wg.Wait()
