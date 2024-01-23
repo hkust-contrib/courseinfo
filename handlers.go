@@ -3,8 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"slices"
+	"strings"
 
+	"github.com/gocolly/colly/v2"
 	"github.com/gorilla/mux"
 )
 
@@ -89,7 +93,7 @@ func (a *app) HandleGetCourse(w http.ResponseWriter, r *http.Request) {
 		writeResponseBody(w, http.StatusOK, val)
 		return
 	}
-	a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+	GetCourse(department, a)
 	writeResponseBody(w, http.StatusOK, a.cache[courseCode])
 }
 
@@ -108,6 +112,28 @@ func (a *app) HandleRefreshCourses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.endpoint = fmt.Sprintf("%s/%s", baseURL, semester)
-	a.crawler.Visit(a.endpoint)
+	PreCacheCurrentSemesterCourses(a, a.logger)
 	writeResponseBody(w, http.StatusOK, a.cache)
+}
+
+func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
+	courseCode, courseTitle, _ := strings.Cut(e.ChildText("h2"), " - ")
+	logger.Info("Parsing for", "courseCode", courseCode)
+	code := strings.ReplaceAll(courseCode, " ", "")
+	course := &Course{
+		Code:        code,
+		Title:       courseTitle[0:strings.Index(courseTitle, " (")],
+		Instructors: []string{},
+	}
+	for _, name := range e.ChildTexts("a") {
+		if !slices.Contains(course.Instructors, name) && name != "" {
+			course.Instructors = append(course.Instructors, name)
+		}
+	}
+	for _, section := range e.ChildTexts(".newsect > td:nth-child(1)") {
+		if !slices.Contains(course.Sections, section) && section != "" {
+			course.Sections = append(course.Sections, section[0:strings.Index(section, " (")])
+		}
+	}
+	return code, course
 }

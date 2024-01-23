@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/gocolly/colly/v2"
@@ -45,7 +45,6 @@ type app struct {
 	cache           map[string]*Course
 	departmentCache []string
 	router          *mux.Router
-	crawler         *colly.Collector
 	logger          *slog.Logger
 	manifest        *buildInfo
 }
@@ -128,51 +127,9 @@ func NewApp(logger *slog.Logger) *app {
 		router:          router,
 		cache:           make(map[string]*Course),
 		departmentCache: []string{},
-		crawler:         colly.NewCollector(),
 		logger:          logger,
 		manifest:        manifest,
 	}
-}
-
-func (a *app) defineCrawlingRules() {
-	a.crawler.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
-		courseCode, courseTitle, _ := strings.Cut(e.ChildText("h2"), " - ")
-		a.logger.Info("Parsing for", "courseCode", courseCode)
-		code := strings.ReplaceAll(courseCode, " ", "")
-		course := &Course{
-			Code:        code,
-			Title:       courseTitle[0:strings.Index(courseTitle, " (")],
-			Instructors: []string{},
-		}
-		for _, name := range e.ChildTexts("a") {
-			if !slices.Contains(course.Instructors, name) && name != "" {
-				course.Instructors = append(course.Instructors, name)
-			}
-		}
-		for _, section := range e.ChildTexts(".newsect > td:nth-child(1)") {
-			if !slices.Contains(course.Sections, section) && section != "" {
-				course.Sections = append(course.Sections, section[0:strings.Index(section, " (")])
-			}
-		}
-		a.remember(code, course)
-	})
-	a.crawler.OnHTML("a[class=ug]", func(e *colly.HTMLElement) {
-		department := e.Text
-		if !slices.Contains(a.departmentCache, department) {
-			a.logger.Info("Traversing courses for", "department", department)
-			a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
-			a.departmentCache = append(a.departmentCache, department)
-		}
-	})
-	a.crawler.OnHTML("a[class=pg]", func(e *colly.HTMLElement) {
-		department := e.Text
-		if !slices.Contains(a.departmentCache, department) {
-			a.logger.Info("Traversing courses for", "department", department)
-			a.crawler.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
-			a.departmentCache = append(a.departmentCache, department)
-		}
-	})
-	a.logger.Info("Crawler parsing and traversing rules established")
 }
 
 func (a *app) remember(courseCode string, c *Course) {
@@ -193,16 +150,57 @@ func handleInterrupt(logger *slog.Logger, server *http.Server) {
 	os.Exit(0)
 }
 
+func GetCourse(department string, a *app) {
+	collector := colly.NewCollector()
+	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
+		code, course := ParseCourse(e, a.logger)
+		a.remember(code, course)
+	})
+	collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+}
+
+func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
+	collector := colly.NewCollector()
+	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
+		code, course := ParseCourse(e, logger)
+		a.remember(code, course)
+	})
+	collector.OnHTML("a[class=ug]", func(e *colly.HTMLElement) {
+		department := e.Text
+		if !slices.Contains(a.departmentCache, department) {
+			logger.Info("Traversing courses for", "department", department)
+			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.departmentCache = append(a.departmentCache, department)
+		}
+	})
+	collector.OnHTML("a[class=pg]", func(e *colly.HTMLElement) {
+		department := e.Text
+		if !slices.Contains(a.departmentCache, department) {
+			logger.Info("Traversing courses for", "department", department)
+			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.departmentCache = append(a.departmentCache, department)
+		}
+	})
+	collector.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	a := NewApp(logger)
 	a.routes()
-	a.defineCrawlingRules()
-	a.crawler.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+	PreCacheCurrentSemesterCourses(a, logger)
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: a.router,
 	}
-	go handleInterrupt(logger, server)
-	logger.Error("An unexpected error has occured", server.ListenAndServe())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		handleInterrupt(logger, server)
+	}()
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		logger.Error("An unexpected error has occured", err)
+	}
+	wg.Wait()
 }
