@@ -20,5 +20,5 @@ build:
   extends: [.dagger]
   stage: build
   script:
-    - dagger run go ci/pipeline.go
+    - dagger run go run ci/pipeline.go
 
