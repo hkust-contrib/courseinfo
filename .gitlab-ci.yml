@@ -1,5 +1,5 @@
 .prerequisite:
-  image: golang:latest
+  image: golang:alpine
   services:
     - docker:${DOCKER_VERSION}-dind
   variables:
