@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/gocolly/colly/v2"
@@ -136,9 +137,12 @@ func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
 	courseCode, courseTitle, _ := strings.Cut(e.ChildText("h2"), " - ")
 	logger.Info("Parsing for", "courseCode", courseCode)
 	code := strings.ReplaceAll(courseCode, " ", "")
+	unitString := courseTitle[strings.Index(courseTitle, "(")+1:strings.Index(courseTitle, ")")]
+	unit := strconv.Atoi(strings.Split(unitString, " ")[0])
 	course := &Course{
 		Code:        code,
 		Title:       courseTitle[0:strings.Index(courseTitle, " (")],
+		Credits:	 unit,
 		Instructors: []string{},
 	}
 	for _, name := range e.ChildTexts("a") {
