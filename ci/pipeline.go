@@ -30,7 +30,7 @@ func build(ctx context.Context) error {
 	runtime = runtime.WithExposedPort(8080)
 	runtime = runtime.WithEntrypoint([]string{"/app/bin/acch"})
 
-	secret := client.SetSecret("password", os.Getenv("CI_REGISTRY"))
+	secret := client.SetSecret("password", os.Getenv("CI_REGISTRY_PASSWORD"))
 	runtime = runtime.WithRegistryAuth(os.Getenv("CI_REGISTRY"), os.Getenv("CI_REGISTRY_USER"), secret)
 	image, err := runtime.Publish(ctx, os.Getenv("CI_REGISTRY_IMAGE"))
 	slog.Info("Successfully published image at ", image)
