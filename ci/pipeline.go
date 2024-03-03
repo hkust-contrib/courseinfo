@@ -34,6 +34,9 @@ func build(ctx context.Context) error {
 	for _, tag := range []string{"latest", os.Getenv("CI_COMMIT_SHORT_SHA")} {
 		urn := fmt.Sprintf("%s:%s", os.Getenv("CI_REGISTRY_IMAGE"), tag)
 		image, err := runtime.WithRegistryAuth(os.Getenv("CI_REGISTRY"), os.Getenv("CI_REGISTRY_USER"), secret).Publish(ctx, urn)
+		if err != nil {
+			panic(err)
+		}
 		slog.Info("Successfully published", "image", image)
 	}
 	if err != nil {
