@@ -1,6 +1,7 @@
 package main
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"dagger.io/dagger"
