@@ -97,7 +97,7 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 
 func (a *app) HandleGetCourse(c echo.Context) error {
 	a.logger.Info("GET /v1/courses/", "course", c.Param("course"))
-	courseCode := c.Param("course")
+	courseCode := strings.ToUpper(c.Param("course"))
 	department := courseCode[0:4]
 	if val, ok := a.cache[courseCode]; ok {
 		c.JSON(http.StatusOK, val)
