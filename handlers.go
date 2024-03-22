@@ -138,7 +138,7 @@ func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
 	logger.Info("Parsing for", "courseCode", courseCode)
 	code := strings.ReplaceAll(courseCode, " ", "")
 	unitString := courseTitle[strings.LastIndex(courseTitle, "(")+1 : strings.LastIndex(courseTitle, ")")]
-	unit, err := strconv.Atoi(strings.Split(unitString, " ")[0])
+	unit, err := strconv.ParseFloat(strings.Split(unitString, " ")[0], 32)
 	if err != nil {
 		panic(err)
 	}
