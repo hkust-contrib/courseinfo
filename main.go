@@ -26,7 +26,7 @@ var (
 type Course struct {
 	Code        string   `json:"code"`
 	Title       string   `json:"title"`
-	Credits     float32  `json:"credits"`
+	Credits     float64  `json:"credits"`
 	Instructors []string `json:"instructors"`
 	Sections    []string `json:"sections"`
 }
