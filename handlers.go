@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -146,17 +145,24 @@ func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
 		Code:        code,
 		Title:       courseTitle[0:strings.Index(courseTitle, " (")],
 		Credits:     unit,
-		Instructors: []string{},
+		Instructors: make(map[string][]string),
 	}
-	for _, name := range e.ChildTexts("a") {
-		if !slices.Contains(course.Instructors, name) && name != "" {
-			course.Instructors = append(course.Instructors, name)
+	e.ForEach(".newsect", func(i int, e *colly.HTMLElement) {
+		var sectionCode string
+		for _, section := range e.ChildTexts("td:nth-child(1)") {
+			if section != "" {
+				sectionCode = section[0:strings.Index(section, " (")]
+			}
 		}
-	}
-	for _, section := range e.ChildTexts(".newsect > td:nth-child(1)") {
-		if !slices.Contains(course.Sections, section) && section != "" {
-			course.Sections = append(course.Sections, section[0:strings.Index(section, " (")])
+		course.Sections = append(course.Sections, sectionCode)
+		isTutorial := e.ChildTexts("td:nth-child(5) > a")[0] != ""
+		querySelector := "td:nth-child(4) > a"
+		if isTutorial {
+			querySelector = "td:nth-child(5) > a"
 		}
-	}
+		for _, name := range e.ChildTexts(querySelector) {
+			course.Instructors[name] = append(course.Instructors[name], sectionCode)
+		}
+	})
 	return code, course
 }
