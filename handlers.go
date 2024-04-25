@@ -68,7 +68,7 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 		c.JSON(http.StatusOK, s)
 		return nil
 	}
-	currentSemester, err := getCurrentSemesterCode(a.logger)
+	currentSemester, err := getCurrentSemesterCode()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, struct {
 			Status  string `json:"status"`
@@ -115,7 +115,7 @@ func (a *app) HandleGetCourses(c echo.Context) error {
 
 func (a *app) HandleRefreshCourses(c echo.Context) error {
 	a.logger.Info("PATCH /v1/courses")
-	semester, err := getCurrentSemesterCode(a.logger)
+	semester, err := getCurrentSemesterCode()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, struct {
 			Status  string `json:"status"`

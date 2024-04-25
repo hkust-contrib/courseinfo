@@ -121,7 +121,7 @@ func NewApp(logger *slog.Logger) *app {
 	e := echo.New()
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
-	currentSemester, err := getCurrentSemesterCode(logger)
+	currentSemester, err := getCurrentSemesterCode()
 	if err != nil {
 		logger.Error("error while getting current semester code", err)
 		os.Exit(1)

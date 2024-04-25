@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
-	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -59,17 +56,21 @@ func (a *app) parseSemester(code string) (semester, error) {
 	}, nil
 }
 
-func getCurrentSemesterCode(logger *slog.Logger) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL, nil)
-	if err != nil {
-		logger.Error("error while forming http request %s\n", err)
-		return "", err
+func getCurrentSemesterCode() (string, error) {
+	t := time.Now()
+	year := t.Year()
+	month := t.Month()
+	if month < time.September {
+		prefix := fmt.Sprintf("%d", year-1)[:2]
+		if month > time.February {
+			if month > time.June {
+				return fmt.Sprintf("%s40", prefix), nil
+			}
+			return fmt.Sprintf("%s30", prefix), nil
+		}
+		return fmt.Sprintf("%s20", prefix), nil
+	} else {
+		prefix := fmt.Sprintf("%d", year)[:2]
+		return fmt.Sprintf("%s10", prefix), nil
 	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logger.Error("error making http request: %s\n", err)
-		return "", err
-	}
-	redirect := strings.Split(res.Request.URL.String(), "/")
-	return redirect[len(redirect)-2], nil
 }
