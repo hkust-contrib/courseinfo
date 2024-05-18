@@ -31,6 +31,11 @@ type Course struct {
 	Sections    []string            `json:"sections"`
 }
 
+type CourseParsingResult struct {
+	Code   string
+	Course *Course
+}
+
 type buildInfo struct {
 	Name        string
 	Runtime     string
@@ -136,9 +141,9 @@ func NewApp(logger *slog.Logger) *app {
 	}
 }
 
-func (a *app) remember(courseCode string, c *Course) {
-	a.cache[courseCode] = c
-	a.logger.Info("In-memory cache updated for", "courseCode", courseCode)
+func (a *app) remember(r *CourseParsingResult) {
+	a.cache[r.Code] = r.Course
+	a.logger.Info("In-memory cache updated for", "courseCode", r.Code)
 }
 
 func handleInterrupt(logger *slog.Logger, a *app) {
@@ -157,8 +162,12 @@ func handleInterrupt(logger *slog.Logger, a *app) {
 func GetCourse(department string, a *app) {
 	collector := colly.NewCollector()
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
-		code, course := ParseCourse(e, a.logger)
-		a.remember(code, course)
+		result, err := ParseCourse(e, a.logger)
+		if err != nil {
+			a.logger.Error("error while parsing course", err)
+			return
+		}
+		a.remember(result)
 	})
 	collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
 }
@@ -166,8 +175,12 @@ func GetCourse(department string, a *app) {
 func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 	collector := colly.NewCollector()
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
-		code, course := ParseCourse(e, logger)
-		a.remember(code, course)
+		result, err := ParseCourse(e, logger)
+		if err != nil {
+			logger.Error("error while parsing course", err)
+			return
+		}
+		a.remember(result)
 	})
 	collector.OnHTML("a[class=ug]", func(e *colly.HTMLElement) {
 		department := e.Text

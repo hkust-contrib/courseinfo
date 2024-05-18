@@ -124,7 +124,7 @@ func (a *app) HandleRefreshCourses(c echo.Context) error {
 			Status:  "error",
 			Message: err.Error(),
 		})
-		return err
+		return fmt.Errorf("route handler: error getting current semester code: %w", err)
 	}
 	a.endpoint = fmt.Sprintf("%s/%s", baseURL, semester)
 	PreCacheCurrentSemesterCourses(a, a.logger)
@@ -132,14 +132,14 @@ func (a *app) HandleRefreshCourses(c echo.Context) error {
 	return nil
 }
 
-func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
+func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (*CourseParsingResult, error) {
 	courseCode, courseTitle, _ := strings.Cut(e.ChildText("h2"), " - ")
 	logger.Info("Parsing for", "courseCode", courseCode)
 	code := strings.ReplaceAll(courseCode, " ", "")
 	unitString := courseTitle[strings.LastIndex(courseTitle, "(")+1 : strings.LastIndex(courseTitle, ")")]
 	unit, err := strconv.ParseFloat(strings.Split(unitString, " ")[0], 32)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("course parsing: error converting course credits unit: %w", err)
 	}
 	course := &Course{
 		Code:        code,
@@ -164,5 +164,8 @@ func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (string, *Course) {
 			course.Instructors[name] = append(course.Instructors[name], sectionCode)
 		}
 	})
-	return code, course
+	return &CourseParsingResult{
+		Code:   courseCode,
+		Course: course,
+	}, nil
 }

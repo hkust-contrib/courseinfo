@@ -34,12 +34,12 @@ func (a *app) parseSemester(code string) (semester, error) {
 	inputYear, err := strconv.Atoi(inputSemesterPrefix)
 	if err != nil {
 		a.logger.Error("error while parsing semester code", err)
-		return semester{}, err
+		return semester{}, fmt.Errorf("semester code integer conversion for year: %w", err)
 	}
 	inputSeason, err := strconv.Atoi(seasonIndicator)
 	if err != nil {
 		a.logger.Error("error while parsing semester code", err)
-		return semester{}, err
+		return semester{}, fmt.Errorf("semester code integer conversion for season: %w", err)
 	}
 	cohort := fmt.Sprintf("%s%s - %s%d", currentYearPrefix, inputSemesterPrefix, currentYearPrefix, inputYear+1)
 	var year string
