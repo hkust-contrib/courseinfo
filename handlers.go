@@ -133,7 +133,7 @@ func (a *app) HandleRefreshCourses(c echo.Context) error {
 }
 
 func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (*CourseParsingResult, error) {
-	courseCode, courseTitle, _ := strings.Cut(e.ChildText("h2"), " - ")
+	courseCode, courseTitle, _ := strings.Cut(e.ChildText("div.courseinfo > div.courseattrContainer > div.subject"), " - ")
 	logger.Info("Parsing for", "courseCode", courseCode)
 	code := strings.ReplaceAll(courseCode, " ", "")
 	unitString := courseTitle[strings.LastIndex(courseTitle, "(")+1 : strings.LastIndex(courseTitle, ")")]
@@ -155,17 +155,17 @@ func ParseCourse(e *colly.HTMLElement, logger *slog.Logger) (*CourseParsingResul
 			}
 		}
 		course.Sections = append(course.Sections, sectionCode)
-		isTutorial := e.ChildTexts("td:nth-child(5) > a")[0] != ""
-		querySelector := "td:nth-child(4) > a"
+		isTutorial := len(e.ChildTexts("td:nth-child(5) > div.taListContainer > div.taList > a")) > 0 && e.ChildTexts("td:nth-child(5) > div.taListContainer > div.taList > a")[0] != ""
+		querySelector := "td:nth-child(4) > div.instructorList > a"
 		if isTutorial {
-			querySelector = "td:nth-child(5) > a"
+			querySelector = "td:nth-child(5) > div.taListContainer > div.taList > a"
 		}
 		for _, name := range e.ChildTexts(querySelector) {
 			course.Instructors[name] = append(course.Instructors[name], sectionCode)
 		}
 	})
 	return &CourseParsingResult{
-		Code:   courseCode,
+		Code:   code,
 		Course: course,
 	}, nil
 }

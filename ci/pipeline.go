@@ -1,15 +1,17 @@
 package main
+
 import (
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
+
 	"dagger.io/dagger"
 )
 
 func main() {
 	if err := build(context.Background()); err != nil {
-		slog.Error("An error occurred while running pipeline", err)
+		slog.Error("An error occurred while running pipeline", slog.String("error", err.Error()))
 	}
 }
 
@@ -29,6 +31,7 @@ func build(ctx context.Context) error {
 	runtime = runtime.WithWorkdir("/app")
 	runtime = runtime.WithFile("/app/bin/acch", builder.File("/src/bin/acch"))
 	runtime = runtime.WithExposedPort(8080)
+	runtime = runtime.WithExposedPort(2112)
 	runtime = runtime.WithEntrypoint([]string{"/app/bin/acch"})
 
 	secret := client.SetSecret("password", os.Getenv("CI_REGISTRY_PASSWORD"))
@@ -40,9 +43,5 @@ func build(ctx context.Context) error {
 		}
 		slog.Info("Successfully published", "image", image)
 	}
-	if err != nil {
-		return err
-	}
 	return nil
 }
-

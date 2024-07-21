@@ -17,6 +17,7 @@ import (
 	"github.com/gocolly/colly/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -128,7 +129,7 @@ func NewApp(logger *slog.Logger) *app {
 	e.Pre(middleware.RemoveTrailingSlash())
 	currentSemester, err := getCurrentSemesterCode()
 	if err != nil {
-		logger.Error("error while getting current semester code", err)
+		logger.Error("error while getting current semester code", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	return &app{
@@ -146,6 +147,18 @@ func (a *app) remember(r *CourseParsingResult) {
 	a.logger.Info("In-memory cache updated for", "courseCode", r.Code)
 }
 
+func (a *app) Start() error {
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":2112", nil)
+	}()
+	err := a.server.Start(":8080")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func handleInterrupt(logger *slog.Logger, a *app) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
@@ -153,7 +166,7 @@ func handleInterrupt(logger *slog.Logger, a *app) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := a.server.Shutdown(ctx); err != nil {
-		logger.Error("Server Shutdown: ", err)
+		logger.Error("Server Shutdown: ", slog.String("error", err.Error()))
 	}
 	logger.Info("Shutting down...")
 	os.Exit(0)
@@ -164,7 +177,7 @@ func GetCourse(department string, a *app) {
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
 		result, err := ParseCourse(e, a.logger)
 		if err != nil {
-			a.logger.Error("error while parsing course", err)
+			a.logger.Error("error while parsing course", slog.String("error", err.Error()))
 			return
 		}
 		a.remember(result)
@@ -177,7 +190,7 @@ func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
 		result, err := ParseCourse(e, logger)
 		if err != nil {
-			logger.Error("error while parsing course", err)
+			logger.Error("error while parsing course", slog.String("error", err.Error()))
 			return
 		}
 		a.remember(result)
@@ -205,15 +218,15 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	a := NewApp(logger)
 	a.routes()
-	PreCacheCurrentSemesterCourses(a, logger)
+	// PreCacheCurrentSemesterCourses(a, logger)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		handleInterrupt(logger, a)
 	}()
-	if err := a.server.Start(":8080"); err != http.ErrServerClosed {
-		logger.Error("An unexpected error has occured", err)
+	if err := a.Start(); err != http.ErrServerClosed {
+		logger.Error("An unexpected error has occured", slog.String("error", err.Error()))
 	}
 	wg.Wait()
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"time"
@@ -33,12 +34,12 @@ func (a *app) parseSemester(code string) (semester, error) {
 	inputSemesterPrefix := code[0 : len(code)-2]
 	inputYear, err := strconv.Atoi(inputSemesterPrefix)
 	if err != nil {
-		a.logger.Error("error while parsing semester code", err)
+		a.logger.Error("error while parsing semester code", slog.String("error", err.Error()))
 		return semester{}, fmt.Errorf("semester code integer conversion for year: %w", err)
 	}
 	inputSeason, err := strconv.Atoi(seasonIndicator)
 	if err != nil {
-		a.logger.Error("error while parsing semester code", err)
+		a.logger.Error("error while parsing semester code", slog.String("error", err.Error()))
 		return semester{}, fmt.Errorf("semester code integer conversion for season: %w", err)
 	}
 	cohort := fmt.Sprintf("%s%s - %s%d", currentYearPrefix, inputSemesterPrefix, currentYearPrefix, inputYear+1)
