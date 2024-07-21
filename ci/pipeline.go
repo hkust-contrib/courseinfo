@@ -26,13 +26,13 @@ func build(ctx context.Context) error {
 	builder = builder.WithDirectory("/src", src).WithWorkdir("/src")
 	builder = builder.WithExec([]string{"go", "mod", "download"})
 	builder = builder.WithEnvVariable("CGO_ENABLED", "0").WithEnvVariable("GOOS", "linux").WithEnvVariable("GOARCH", "amd64")
-	builder = builder.WithExec([]string{"go", "build", "-o", "bin/acch"})
+	builder = builder.WithExec([]string{"go", "build", "-o", "bin/courseinfod"})
 	runtime := client.Container().From("gcr.io/distroless/base-debian12")
 	runtime = runtime.WithWorkdir("/app")
-	runtime = runtime.WithFile("/app/bin/acch", builder.File("/src/bin/acch"))
+	runtime = runtime.WithFile("/app/bin/courseinfod", builder.File("/src/bin/courseinfod"))
 	runtime = runtime.WithExposedPort(8080)
 	runtime = runtime.WithExposedPort(2112)
-	runtime = runtime.WithEntrypoint([]string{"/app/bin/acch"})
+	runtime = runtime.WithEntrypoint([]string{"/app/bin/courseinfod", "-precache"})
 
 	secret := client.SetSecret("password", os.Getenv("CI_REGISTRY_PASSWORD"))
 	for _, tag := range []string{"latest", os.Getenv("CI_COMMIT_SHORT_SHA")} {

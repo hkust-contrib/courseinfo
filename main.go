@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -216,9 +217,14 @@ func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	var precache bool
+	flag.BoolVar(&precache, "precache", false, "Pre-cache current semester courses")
+	flag.Parse()
 	a := NewApp(logger)
 	a.routes()
-	// PreCacheCurrentSemesterCourses(a, logger)
+	if precache {
+		PreCacheCurrentSemesterCourses(a, logger)
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

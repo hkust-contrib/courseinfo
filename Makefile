@@ -1,6 +1,6 @@
 build:
-	@go build -o bin/acch
+	@go build -o bin/courseinfod
 
 run: build
-	@./bin/acch
+	@./bin/courseinfod
 
