@@ -17,11 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.22
-
       - name: Set outputs
         id: vars
         run: |
@@ -34,11 +29,6 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
             echo "version=$(date '+%Y.%m.${{ github.run_number }}')" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Build
-        env:
-          CGO_ENABLED: 0
-        run: make APP_VERSION=${{ steps.vars.outputs.version }} build
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
