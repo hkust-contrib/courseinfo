@@ -64,8 +64,8 @@ func getCurrentSemesterCode() (string, error) {
 	if month < time.September {
 		prefix := fmt.Sprintf("%d", year-1)
 		prefix = prefix[len(prefix)-2:]
-		if month > time.February {
-			if month > time.June {
+		if month >= time.February {
+			if month >= time.June {
 				return fmt.Sprintf("%s40", prefix), nil
 			}
 			return fmt.Sprintf("%s30", prefix), nil
