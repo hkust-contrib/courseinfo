@@ -222,9 +222,7 @@ func main() {
 	flag.Parse()
 	a := NewApp(logger)
 	a.routes()
-	if precache {
-		PreCacheCurrentSemesterCourses(a, logger)
-	}
+	PreCacheCurrentSemesterCourses(a, logger)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
