@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -188,6 +189,10 @@ func GetCourse(department string, a *app) {
 
 func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 	collector := colly.NewCollector()
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	collector.WithTransport(tr)
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
 		result, err := ParseCourse(e, logger)
 		if err != nil {
@@ -212,7 +217,10 @@ func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 			a.departmentCache = append(a.departmentCache, department)
 		}
 	})
-	collector.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+	err := collector.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
+	if err != nil {
+		logger.Error("error while visting page", slog.String("error", err.Error()))
+	}
 }
 
 func main() {
