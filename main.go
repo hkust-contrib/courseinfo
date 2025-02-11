@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -129,6 +128,7 @@ func NewApp(logger *slog.Logger) *app {
 	e := echo.New()
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middleware.Logger())
 	currentSemester, err := getCurrentSemesterCode()
 	if err != nil {
 		logger.Error("error while getting current semester code", slog.String("error", err.Error()))
@@ -189,10 +189,6 @@ func GetCourse(department string, a *app) {
 
 func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 	collector := colly.NewCollector()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	collector.WithTransport(tr)
 	collector.OnHTML("div[class=course]", func(e *colly.HTMLElement) {
 		result, err := ParseCourse(e, logger)
 		if err != nil {
@@ -230,7 +226,9 @@ func main() {
 	flag.Parse()
 	a := NewApp(logger)
 	a.routes()
-	PreCacheCurrentSemesterCourses(a, logger)
+	if precache {
+		PreCacheCurrentSemesterCourses(a, logger)
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
