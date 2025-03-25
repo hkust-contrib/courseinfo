@@ -71,8 +71,8 @@ func (b *buildInfo) MarshalJSON() ([]byte, error) {
 		Runtime     string `json:"runtime"`
 		Hostname    string `json:"hostname"`
 		Platform    string `json:"platform"`
-		BuildCommit string `json:"buildCommit"`
-		BuildDate   string `json:"buildDate"`
+		BuildCommit string `json:"build_commit"`
+		BuildDate   string `json:"build_date"`
 		Uptime      string `json:"uptime"`
 	}{
 		Runtime:     b.Runtime,
