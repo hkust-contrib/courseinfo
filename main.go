@@ -53,7 +53,9 @@ type app struct {
 	endpoint        string
 	cache           map[string]*Course
 	departmentCache []string
+	mu              sync.RWMutex
 	server          *echo.Echo
+	metricsServer   *http.Server
 	logger          *slog.Logger
 	manifest        *buildInfo
 }
@@ -134,25 +136,36 @@ func NewApp(logger *slog.Logger) *app {
 		logger.Error("error while getting current semester code", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+
 	return &app{
 		endpoint:        fmt.Sprintf("%s/%s", baseURL, currentSemester),
 		server:          e,
 		cache:           make(map[string]*Course),
 		departmentCache: []string{},
-		logger:          logger,
-		manifest:        manifest,
+		metricsServer: &http.Server{
+			Addr:    ":2112",
+			Handler: metricsMux,
+		},
+		logger:   logger,
+		manifest: manifest,
 	}
 }
 
 func (a *app) remember(r *CourseParsingResult) {
+	a.mu.Lock()
 	a.cache[r.Code] = r.Course
+	a.mu.Unlock()
 	a.logger.Info("In-memory cache updated for", "courseCode", r.Code)
 }
 
 func (a *app) Start() error {
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(":2112", nil)
+		if err := a.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			a.logger.Error("Metrics server error", slog.String("error", err.Error()))
+		}
 	}()
 	err := a.server.Start(":8080")
 	if err != nil {
@@ -167,6 +180,9 @@ func handleInterrupt(logger *slog.Logger, a *app) {
 	<-quit
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := a.metricsServer.Shutdown(ctx); err != nil {
+		logger.Error("Metrics server shutdown error", slog.String("error", err.Error()))
+	}
 	if err := a.server.Shutdown(ctx); err != nil {
 		logger.Error("Server Shutdown: ", slog.String("error", err.Error()))
 	}
@@ -199,18 +215,28 @@ func PreCacheCurrentSemesterCourses(a *app, logger *slog.Logger) {
 	})
 	collector.OnHTML("a[class=ug]", func(e *colly.HTMLElement) {
 		department := e.Text
-		if !slices.Contains(a.departmentCache, department) {
+		a.mu.RLock()
+		found := slices.Contains(a.departmentCache, department)
+		a.mu.RUnlock()
+		if !found {
 			logger.Info("Traversing courses for", "department", department)
-			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.mu.Lock()
 			a.departmentCache = append(a.departmentCache, department)
+			a.mu.Unlock()
+			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
 		}
 	})
 	collector.OnHTML("a[class=pg]", func(e *colly.HTMLElement) {
 		department := e.Text
-		if !slices.Contains(a.departmentCache, department) {
+		a.mu.RLock()
+		found := slices.Contains(a.departmentCache, department)
+		a.mu.RUnlock()
+		if !found {
 			logger.Info("Traversing courses for", "department", department)
-			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
+			a.mu.Lock()
 			a.departmentCache = append(a.departmentCache, department)
+			a.mu.Unlock()
+			collector.Visit(fmt.Sprintf("%s/subject/%s", a.endpoint, department))
 		}
 	})
 	err := collector.Visit(fmt.Sprintf("%s/subject/COMP", a.endpoint))
@@ -234,8 +260,10 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			logger.Info("Refreshing course cache (weekly)")
+			a.mu.Lock()
 			a.cache = make(map[string]*Course)
 			a.departmentCache = []string{}
+			a.mu.Unlock()
 			PreCacheCurrentSemesterCourses(a, logger)
 		}
 	}()

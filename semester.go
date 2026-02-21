@@ -3,11 +3,8 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"slices"
 	"strconv"
 	"time"
-
-	"golang.org/x/exp/maps"
 )
 
 type semester struct {
@@ -27,7 +24,7 @@ func (a *app) parseSemester(code string) (semester, error) {
 	currentYear := fmt.Sprintf("%d", time.Now().Year())
 	currentYearPrefix := currentYear[0 : len(currentYear)-2]
 	seasonIndicator := code[len(code)-2:]
-	if !slices.Contains(maps.Keys(semesterNames), seasonIndicator) {
+	if _, ok := semesterNames[seasonIndicator]; !ok {
 		a.logger.Error("invalid semester code", "code", code)
 		return semester{}, fmt.Errorf("invalid semester code")
 	}

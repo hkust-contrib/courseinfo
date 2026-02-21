@@ -3,26 +3,29 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/exp/maps"
 )
 
 type healthzResponse struct {
 	Status string `json:"status"`
 }
 
+type errorResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
 func (a *app) HandleIntrospection(c echo.Context) error {
 	m, err := a.manifest.MarshalJSON()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		}{
+		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status:  "error",
 			Message: err.Error(),
 		})
@@ -46,19 +49,13 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 		s, err := a.parseSemester(c.Param("semester"))
 		if err != nil {
 			if err.Error() == "invalid semester code" {
-				c.JSON(http.StatusBadRequest, struct {
-					Status  string `json:"status"`
-					Message string `json:"message"`
-				}{
+				c.JSON(http.StatusBadRequest, errorResponse{
 					Status:  "error",
 					Message: err.Error(),
 				})
 				return err
 			} else {
-				c.JSON(http.StatusInternalServerError, struct {
-					Status  string `json:"status"`
-					Message string `json:"message"`
-				}{
+				c.JSON(http.StatusInternalServerError, errorResponse{
 					Status:  "error",
 					Message: err.Error(),
 				})
@@ -70,10 +67,7 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 	}
 	currentSemester, err := getCurrentSemesterCode()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		}{
+		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status:  "error",
 			Message: err.Error(),
 		})
@@ -81,10 +75,7 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 	}
 	s, err := a.parseSemester(currentSemester)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		}{
+		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status:  "error",
 			Message: err.Error(),
 		})
@@ -97,19 +88,45 @@ func (a *app) HandleGetSemester(c echo.Context) error {
 func (a *app) HandleGetCourse(c echo.Context) error {
 	a.logger.Info("GET /v1/courses/", "course", c.Param("course"))
 	courseCode := strings.ToUpper(c.Param("course"))
+	if len(courseCode) < 4 {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status:  "error",
+			Message: "course code must be at least 4 characters",
+		})
+		return fmt.Errorf("invalid course code: %s", courseCode)
+	}
 	department := courseCode[0:4]
+
+	a.mu.RLock()
 	if val, ok := a.cache[courseCode]; ok {
+		a.mu.RUnlock()
 		c.JSON(http.StatusOK, val)
 		return nil
 	}
+	a.mu.RUnlock()
+
 	GetCourse(department, a)
-	c.JSON(http.StatusOK, a.cache[courseCode])
+
+	a.mu.RLock()
+	val, ok := a.cache[courseCode]
+	a.mu.RUnlock()
+	if !ok {
+		c.JSON(http.StatusNotFound, errorResponse{
+			Status:  "error",
+			Message: fmt.Sprintf("course %s not found", courseCode),
+		})
+		return nil
+	}
+	c.JSON(http.StatusOK, val)
 	return nil
 }
 
 func (a *app) HandleGetCourses(c echo.Context) error {
 	a.logger.Info("GET /v1/courses")
-	c.JSON(http.StatusOK, maps.Values(a.cache))
+	a.mu.RLock()
+	courses := slices.Collect(maps.Values(a.cache))
+	a.mu.RUnlock()
+	c.JSON(http.StatusOK, courses)
 	return nil
 }
 
@@ -117,10 +134,7 @@ func (a *app) HandleRefreshCourses(c echo.Context) error {
 	a.logger.Info("PATCH /v1/courses")
 	semester, err := getCurrentSemesterCode()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		}{
+		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status:  "error",
 			Message: err.Error(),
 		})
@@ -128,7 +142,11 @@ func (a *app) HandleRefreshCourses(c echo.Context) error {
 	}
 	a.endpoint = fmt.Sprintf("%s/%s", baseURL, semester)
 	PreCacheCurrentSemesterCourses(a, a.logger)
-	c.JSON(http.StatusOK, a.cache)
+
+	a.mu.RLock()
+	cache := a.cache
+	a.mu.RUnlock()
+	c.JSON(http.StatusOK, cache)
 	return nil
 }
 
