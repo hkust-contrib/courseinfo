@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"time"
 )
@@ -14,37 +13,37 @@ type semester struct {
 	Cohort string `json:"cohort"`
 }
 
-func (a *app) parseSemester(code string) (semester, error) {
+const centuryPrefix = "20"
+
+func parseSemester(code string) (semester, error) {
 	semesterNames := map[string]string{
 		"10": "Fall",
 		"20": "Winter",
 		"30": "Spring",
 		"40": "Summer",
 	}
-	currentYear := fmt.Sprintf("%d", time.Now().Year())
-	currentYearPrefix := currentYear[0 : len(currentYear)-2]
+	if len(code) < 3 {
+		return semester{}, ErrInvalidSemesterCode
+	}
 	seasonIndicator := code[len(code)-2:]
 	if _, ok := semesterNames[seasonIndicator]; !ok {
-		a.logger.Error("invalid semester code", "code", code)
-		return semester{}, fmt.Errorf("invalid semester code")
+		return semester{}, ErrInvalidSemesterCode
 	}
-	inputSemesterPrefix := code[0 : len(code)-2]
+	inputSemesterPrefix := code[:len(code)-2]
 	inputYear, err := strconv.Atoi(inputSemesterPrefix)
 	if err != nil {
-		a.logger.Error("error while parsing semester code", slog.String("error", err.Error()))
 		return semester{}, fmt.Errorf("semester code integer conversion for year: %w", err)
 	}
 	inputSeason, err := strconv.Atoi(seasonIndicator)
 	if err != nil {
-		a.logger.Error("error while parsing semester code", slog.String("error", err.Error()))
 		return semester{}, fmt.Errorf("semester code integer conversion for season: %w", err)
 	}
-	cohort := fmt.Sprintf("%s%s - %s%d", currentYearPrefix, inputSemesterPrefix, currentYearPrefix, inputYear+1)
+	cohort := fmt.Sprintf("%s%s - %s%d", centuryPrefix, inputSemesterPrefix, centuryPrefix, inputYear+1)
 	var year string
 	if inputSeason > 20 {
-		year = fmt.Sprintf("%s%d", currentYearPrefix, inputYear+1)
+		year = fmt.Sprintf("%s%d", centuryPrefix, inputYear+1)
 	} else {
-		year = fmt.Sprintf("%s%s", currentYearPrefix, inputSemesterPrefix)
+		year = fmt.Sprintf("%s%s", centuryPrefix, inputSemesterPrefix)
 	}
 	return semester{
 		Code:   code,
@@ -54,23 +53,23 @@ func (a *app) parseSemester(code string) (semester, error) {
 	}, nil
 }
 
-func getCurrentSemesterCode() (string, error) {
-	t := time.Now()
+func getSemesterCodeForTime(t time.Time) (string, error) {
 	year := t.Year()
 	month := t.Month()
 	if month < time.September {
-		prefix := fmt.Sprintf("%d", year-1)
-		prefix = prefix[len(prefix)-2:]
+		prefix := fmt.Sprintf("%02d", (year-1)%100)
 		if month >= time.February {
 			if month >= time.June {
-				return fmt.Sprintf("%s40", prefix), nil
+				return prefix + "40", nil
 			}
-			return fmt.Sprintf("%s30", prefix), nil
+			return prefix + "30", nil
 		}
-		return fmt.Sprintf("%s20", prefix), nil
-	} else {
-		prefix := fmt.Sprintf("%d", year)
-		prefix = prefix[len(prefix)-2:]
-		return fmt.Sprintf("%s10", prefix), nil
+		return prefix + "20", nil
 	}
+	prefix := fmt.Sprintf("%02d", year%100)
+	return prefix + "10", nil
+}
+
+func getCurrentSemesterCode() (string, error) {
+	return getSemesterCodeForTime(time.Now())
 }
