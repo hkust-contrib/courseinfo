@@ -229,6 +229,16 @@ func main() {
 	if precache {
 		PreCacheCurrentSemesterCourses(a, logger)
 	}
+	go func() {
+		ticker := time.NewTicker(7 * 24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			logger.Info("Refreshing course cache (weekly)")
+			a.cache = make(map[string]*Course)
+			a.departmentCache = []string{}
+			PreCacheCurrentSemesterCourses(a, logger)
+		}
+	}()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
