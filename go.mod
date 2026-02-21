@@ -1,8 +1,6 @@
 module github.com/hkust-cse/crapi
 
-go 1.21
-
-toolchain go1.22.0
+go 1.25.7
 
 require (
 	github.com/gocolly/colly/v2 v2.1.0
