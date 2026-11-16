@@ -4,6 +4,7 @@ import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -291,6 +292,12 @@ test("fetch timeouts bound both response headers and the entire body and release
 });
 
 test("total deadline stops unfinished coverage, records a runner error, and still writes reports", { timeout: 10_000 }, async (t) => {
+  // Reproduce a timeout callback arriving before the monotonic clock reaches the
+  // fractional deadline. Real HTTP and the native parser still perform the work.
+  t.mock.method(performance, "now", () => 0);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let fetching;
+  const inFlight = new Promise((resolve) => { fetching = resolve; });
   let cancelled;
   const closed = new Promise((resolve) => { cancelled = resolve; });
   const outputDir = await outputDirectory(t);
@@ -298,11 +305,13 @@ test("total deadline stops unfinished coverage, records a runner error, and stil
     if (request.url.endsWith("/ELEC")) {
       response.on("close", cancelled);
       response.writeHead(200).write("<html>");
+      fetching();
     } else serveFixtures(request, response);
   });
-  const start = Date.now();
-  const report = await runSmoke(options(baseUrl, outputDir, { fetchTimeoutMs: 5000, totalTimeoutMs: 2000 }));
-  assert.ok(Date.now() - start < 5000);
+  const pending = runSmoke(options(baseUrl, outputDir, { fetchTimeoutMs: 5000, totalTimeoutMs: 2000 }));
+  await inFlight;
+  t.mock.timers.tick(2000);
+  const report = await pending;
   assert.equal(report.status, "failed");
   assert.equal(report.discovered_departments, 3);
   assert.equal(report.checked_departments, 2);

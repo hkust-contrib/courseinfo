@@ -23,8 +23,11 @@ function diagnostic(error) {
 }
 
 function remainingTime(deadline) {
-  const remaining = deadline - performance.now();
-  if (remaining <= 0) throw new SmokeError("runner", "Total run deadline exceeded");
+  const remaining = deadline.expired ? 0 : deadline.at - performance.now();
+  if (remaining <= 0) {
+    deadline.expired = true;
+    throw new SmokeError("runner", "Total run deadline exceeded");
+  }
   return remaining;
 }
 
@@ -40,6 +43,7 @@ function runParser(parserPath, args, input, deadline) {
     let inputError;
     let failure;
     const timer = setTimeout(() => {
+      if (remaining <= PARSER_TIMEOUT_MS) deadline.expired = true;
       failure = new SmokeError("runner", remaining <= PARSER_TIMEOUT_MS
         ? "Total run deadline exceeded while running the native parser"
         : "Native parser exceeded its 30-second runtime limit");
@@ -86,15 +90,16 @@ async function fetchHtml(url, fetchTimeoutMs, deadline) {
   const timeout = Math.min(fetchTimeoutMs, remaining);
   const operationDeadline = performance.now() + timeout;
   const controller = new AbortController();
-  let timedOut = false;
   let reader;
-  const timeoutError = () => new SmokeError(remaining <= fetchTimeoutMs ? "runner" : "fetch",
-    remaining <= fetchTimeoutMs ? "Total run deadline exceeded while fetching source"
-      : `Source fetch exceeded its ${fetchTimeoutMs} ms limit (including response body)`);
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeout);
+  const timeoutError = () => {
+    const totalExpired = remaining <= fetchTimeoutMs;
+    // Timer delays are integer milliseconds; expiration must survive clock rechecks.
+    if (totalExpired) deadline.expired = true;
+    return new SmokeError(totalExpired ? "runner" : "fetch",
+      totalExpired ? "Total run deadline exceeded while fetching source"
+        : `Source fetch exceeded its ${fetchTimeoutMs} ms limit (including response body)`);
+  };
+  const timer = setTimeout(() => controller.abort(timeoutError()), timeout);
   try {
     const response = await fetch(url, { redirect: "error", signal: controller.signal });
     if (response.status !== 200) throw new SmokeError("fetch", `Source returned HTTP ${response.status}`);
@@ -118,7 +123,7 @@ async function fetchHtml(url, fetchTimeoutMs, deadline) {
     return Buffer.concat(chunks, bytes);
   } catch (error) {
     if (error instanceof SmokeError) throw error;
-    if (timedOut) throw timeoutError();
+    if (controller.signal.aborted) throw controller.signal.reason;
     throw new SmokeError("fetch", `Source request failed: ${diagnostic(error)}`);
   } finally {
     clearTimeout(timer);
@@ -206,7 +211,7 @@ export async function runSmoke({
         throw new SmokeError("runner", `${name} must be a positive, finite timer duration`);
       }
     }
-    const deadline = started + totalTimeoutMs;
+    const deadline = { at: started + totalTimeoutMs, expired: false };
     const root = new URL(`${baseUrl.replace(/\/+$/, "")}/`);
     if (!["https:", "http:"].includes(root.protocol) || root.search || root.hash || root.username || root.password) {
       throw new SmokeError("runner", "Source base URL must be an HTTP(S) URL without credentials, query, or fragment");

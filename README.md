@@ -91,6 +91,9 @@ The check fetches the current term's COMP page, discovers all departments, and
 checks each page sequentially using the production Rust parser and snapshot
 serializer. It does not call PATCH, write D1, or deploy anything. Fetches have
 30-second deadlines and a 4 MiB body limit; the full run is bounded to 12 minutes.
+Once the total timeout fires, it cancels active work and prevents later department
+checks, even if timer rounding fires the callback just before the clock deadline.
+Incomplete coverage is recorded as a failed run, not a partial success.
 Parser failures retain rejected HTML alongside the JSON report and run summary
 in a 14-day Actions artifact.
 
