@@ -66,19 +66,53 @@ See [API semantics](docs/api.md) and [deployment/rollback](docs/deployment.md).
 bun run test:native     # Rust core regression suite
 bun run build           # Creates build/index.js and build/index_bg.wasm
 bun run test:worker     # Consumes those exact files; no rebuild/rebundle
+bun run test:smoke       # Offline smoke-runner and issue-reporting regressions
 bun run check           # Rust format and Wasm-target Clippy checks
 make check-infra        # Credential-free Terraform initialization/validation
 ```
 
-No permanent test contacts HKUST or requires Cloudflare credentials. The
-transport tests start local HTTP/Worker processes with isolated D1 state and
-development registries, then remove both. `make test` builds once before running
-the runtime suite.
+The default test suite never contacts HKUST or requires Cloudflare credentials.
+Transport and smoke-runner tests use loopback HTTP and isolated temporary state.
+`make test` builds the Worker once before running its runtime suite. Only the
+explicit live smoke command and weekly workflow below contact HKUST.
 
 Do not change release `strip` to `true`: removing `target_features` before
 wasm-bindgen breaks externref exception-wrapper generation. The configured
 `strip = "debuginfo"` preserves required transformation metadata. The generated
 JavaScript loader and Wasm are both required deployment modules.
+
+## Weekly live parser smoke
+
+`.github/workflows/source-smoke.yml` runs every Sunday at **18:17 UTC**
+(Monday **02:17 Hong Kong time**) and can be dispatched manually on the default
+branch. GitHub's schedule is best-effort, not an exact execution-time guarantee.
+
+The check fetches the current term's COMP page, discovers all departments, and
+checks each page sequentially using the production Rust parser and snapshot
+serializer. It does not call PATCH, write D1, or deploy anything. Fetches have
+30-second deadlines and a 4 MiB body limit; the full run is bounded to 12 minutes.
+Parser failures retain rejected HTML alongside the JSON report and run summary
+in a 14-day Actions artifact.
+
+Failures open **Weekly catalogue source smoke test failed**, or add a comment
+to the existing open tracking issue. Reports distinguish fetch failures, parser
+rejections, and runner/build failures: an outage is not proof of HTML drift.
+Successful runs do not create issues or automatically close existing ones.
+The repository must have Issues and Actions enabled and permit the workflow's
+`GITHUB_TOKEN` to write issues; no personal access token is needed.
+
+Run the live check locally:
+
+```sh
+bun run smoke:live
+```
+
+Results are written to ignored `smoke-results/`; local runs do not create GitHub
+issues. The offline regression command is `bun run test:smoke`.
+This checks the existing validation rules against live pages, not every HTML
+byte change. Harmless layout/content changes that remain valid do not alert;
+silently wrong data that satisfies all current rules can still escape detection.
+GitHub-runner success does not replace hosted Cloudflare egress/resource checks.
 
 ## Observed implementation verification
 

@@ -1,4 +1,4 @@
-.PHONY: setup build test test-native test-worker check check-infra dev plan
+.PHONY: setup build test test-native test-worker test-smoke check check-infra dev plan
 
 # Prerequisites: Node 24, Bun 1.4.3, rustup, Terraform 1.9.8; on Linux,
 # worker-build installation also requires pkg-config and OpenSSL development headers.
@@ -17,7 +17,10 @@ test-native:
 test-worker: build
 	bun run test:worker
 
-test: test-native test-worker
+test-smoke:
+	bun run test:smoke
+
+test: test-native test-worker test-smoke
 
 check-infra:
 	terraform -chdir=deployment fmt -check

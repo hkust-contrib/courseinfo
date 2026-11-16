@@ -135,6 +135,33 @@ again, and applies the saved plan. It never rebuilds. Deployments/migrations are
 serialized per environment. A successful local suite is not authorization to
 turn on the deployment gate or public exposure.
 
+## Weekly live-source monitoring
+
+The separate `source-smoke.yml` workflow runs on the default branch at
+`17 18 * * SUN`, or by manual dispatch. It compiles a native executable against
+the same Rust parsing and serialization code used by the Worker, then reads the
+current-term catalogue directly from HKUST. It needs no Cloudflare credentials,
+does not mutate D1, and does not use the network-restricted PATCH endpoint.
+
+The job has `contents: read` and `issues: write` permissions. On failure it
+creates an issue marked `<!-- courseinfo-live-parser-smoke -->`, or comments on
+the existing open marked issue. Workflow concurrency serializes scheduled and
+manual runs to avoid duplicate issue creation. A failed check stays red even
+after successful issue reporting. Recovery leaves the issue open for review.
+
+Triage the report's failure stage before changing selectors. Fetch failures
+include HTTP errors, deadlines, and oversized responses; parser rejections may
+indicate source markup or content changes; build/runner failures do not establish
+source drift. Download the run artifact for the JSON report and bounded rejected
+HTML. Reproduce against the production parser, minimize a new fixture, and add a
+regression before changing accepted structure. No fixed live course counts or
+HTML hashes are used, so normal catalogue updates are not treated as breakage.
+
+Enable GitHub Issues and Actions, retain `GITHUB_TOKEN` issue-writing permission,
+and ensure scheduled workflows remain active. A GitHub-runner check cannot prove
+Cloudflare egress, memory/CPU capacity, actual Worker Cron delivery, or rollback;
+the hosted acceptance gates below still apply. See the README for local commands.
+
 ## Staging and traffic cutover
 
 Local implementation verification is recorded in the root README. Before moving

@@ -53,6 +53,8 @@ jobs:
         run: bun run check
       - name: Native regression tests
         run: bun run test:native
+      - name: Offline live-smoke and issue-reporting regressions
+        run: bun run test:smoke
       - name: Set immutable source metadata
         run: |
           echo "BUILD_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
