@@ -1,62 +1,184 @@
-name: Publish Image
+name: Test and deploy Worker
 
 on:
   push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub environment with dedicated courseinfo credentials and state
+        type: environment
+        required: true
+      intent:
+        description: Infrastructure operation (never applies on pull requests)
+        type: choice
+        options: [plan, apply]
+        default: plan
+        required: true
+      deployment_version_id:
+        description: Optional retained version UUID for schema-compatible rollback
+        type: string
+        required: false
+
+permissions:
+  contents: read
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  CARGO_TERM_COLOR: always
+  WRANGLER_SEND_METRICS: 'false'
 
 jobs:
-  build-and-push-image:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+  test:
+    name: Native tests, one release build, and production-artifact tests
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set outputs
-        id: vars
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install pinned Rust toolchain from repository
+        run: rustup show
+      - name: Install worker-build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Install pinned worker-build
+        run: cargo install worker-build --version 0.8.7 --locked
+      - name: Install locked JavaScript dependencies
+        run: bun install --frozen-lockfile
+      - name: Rust formatting and Wasm-target lint
+        run: bun run check
+      - name: Native regression tests
+        run: bun run test:native
+      - name: Set immutable source metadata
         run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          if [ ${{ github.ref }} != 'refs/heads/main' ]; then
-            TAG=$(echo ${{ github.head_ref || github.ref_name }} | sed 's/\//-/g')
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-            echo "version=${{ github.ref }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-            echo "version=$(date '+%Y.%m.${{ github.run_number }}')" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
+          echo "BUILD_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+      - name: Build production artifact exactly once
+        run: bun run build
+      - name: Record artifact and deployment-input checksums
+        run: |
+          sha256sum build/index.js build/index_bg.wasm Cargo.toml Cargo.lock crates/*/Cargo.toml package.json bun.lock rust-toolchain.toml wrangler.jsonc deployment/*.tf deployment/.terraform.lock.hcl db/migrations/*.sql db/queries/*.sql > SHA256SUMS
+      - name: Test production artifact in workerd
+        run: bun run test:worker
+      - name: Ensure runtime tests did not rebuild or mutate artifacts
+        run: sha256sum --check SHA256SUMS
+      - name: Retain immutable tested artifact
+        id: artifact
+        uses: actions/upload-artifact@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: courseinfo-worker-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/index.js
+            build/index_bg.wasm
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
+  terraform-check:
+    name: Credential-free infrastructure checks
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: deployment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          terraform_version: '1.9.8'
+      - run: terraform fmt -check
+      - run: terraform init -backend=false -lockfile=readonly -input=false
+      - run: terraform validate -no-color
 
-      - name: Build and push Docker image (Production)
-        uses: docker/build-push-action@v6
-        if: github.ref == 'refs/heads/main'
+  deploy:
+    name: Protected Terraform plan/apply of tested artifact
+    needs: [test, terraform-check]
+    # Authorization is opt-in for this repository, never inherited from concierge.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && vars.COURSEINFO_DEPLOYMENT_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: courseinfo-deployment-${{ inputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: deployment
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      TF_HTTP_ADDRESS: ${{ secrets.COURSEINFO_TF_HTTP_ADDRESS }}
+      TF_HTTP_LOCK_ADDRESS: ${{ secrets.COURSEINFO_TF_HTTP_LOCK_ADDRESS }}
+      TF_HTTP_UNLOCK_ADDRESS: ${{ secrets.COURSEINFO_TF_HTTP_UNLOCK_ADDRESS }}
+      TF_HTTP_USERNAME: ${{ secrets.COURSEINFO_TF_HTTP_USERNAME }}
+      TF_HTTP_PASSWORD: ${{ secrets.COURSEINFO_TF_HTTP_PASSWORD }}
+      TF_HTTP_LOCK_METHOD: POST
+      TF_HTTP_UNLOCK_METHOD: DELETE
+      TF_HTTP_RETRY_WAIT_MIN: '5'
+      CLOUDFLARE_API_TOKEN: ${{ secrets.COURSEINFO_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.COURSEINFO_CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_cloudflare_account_id: ${{ vars.COURSEINFO_CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_worker_name: ${{ vars.COURSEINFO_WORKER_NAME || 'courseinfo' }}
+      TF_VAR_database_name: ${{ vars.COURSEINFO_DATABASE_NAME || 'courseinfo-catalogue' }}
+      TF_VAR_base_url: ${{ vars.COURSEINFO_BASE_URL || 'https://w5.ab.ust.hk/wcq/cgi-bin' }}
+      TF_VAR_workers_dev_enabled: ${{ vars.COURSEINFO_WORKERS_DEV_ENABLED || 'false' }}
+      TF_VAR_cron_enabled: ${{ vars.COURSEINFO_CRON_ENABLED || 'false' }}
+      TF_VAR_fetch_timeout_ms: ${{ vars.COURSEINFO_FETCH_TIMEOUT_MS || '30000' }}
+      TF_VAR_refresh_timeout_ms: ${{ vars.COURSEINFO_REFRESH_TIMEOUT_MS || '720000' }}
+      TF_VAR_course_miss_rate_limit_namespace_id: ${{ vars.COURSEINFO_MISS_RATE_LIMIT_NAMESPACE_ID || '14389001' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require explicitly authorized credentials and locking backend
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$TF_HTTP_ADDRESS"
+          test -n "$TF_HTTP_LOCK_ADDRESS"
+          test -n "$TF_HTTP_UNLOCK_ADDRESS"
+          test -n "$TF_HTTP_USERNAME"
+          test -n "$TF_HTTP_PASSWORD"
+      - uses: actions/setup-node@v4
         with:
-          context: .
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Build and push Docker image (Default)
-        uses: docker/build-push-action@v6
-        if: github.ref != 'refs/heads/main'
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
         with:
-          context: .
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}
-          labels: ${{ steps.meta.outputs.labels }}
+          bun-version: '1.4.3'
+      - name: Install pinned migration runner only (no rebuild)
+        working-directory: .
+        run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.test.outputs.artifact_id }}
+          path: .
+          merge-multiple: true
+      - name: Verify exact tested artifact and deployment inputs
+        working-directory: .
+        run: sha256sum --check SHA256SUMS
+      - name: Set optional domain and retained-version selection
+        env:
+          CUSTOM_DOMAIN: ${{ vars.COURSEINFO_CUSTOM_DOMAIN }}
+          RETAINED_VERSION: ${{ inputs.deployment_version_id }}
+        run: |
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const values = {};
+            if (process.env.CUSTOM_DOMAIN) values.custom_domain = process.env.CUSTOM_DOMAIN;
+            if (process.env.RETAINED_VERSION) values.deployment_version_id = process.env.RETAINED_VERSION;
+            writeFileSync("release.auto.tfvars.json", JSON.stringify(values));
+          '
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - name: Initialize dedicated remote state with provider lock
+        run: terraform init -lockfile=readonly -input=false
+      - name: Plan exact tested artifact (including migration ordering)
+        run: terraform plan -input=false -lock-timeout=5m -out=release.tfplan
+      - name: Verify bytes again before applying saved plan
+        if: inputs.intent == 'apply'
+        working-directory: .
+        run: sha256sum --check SHA256SUMS
+      - name: Apply saved plan without rebuilding
+        if: inputs.intent == 'apply'
+        run: terraform apply -input=false -lock-timeout=5m release.tfplan

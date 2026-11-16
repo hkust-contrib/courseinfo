@@ -1,0 +1,17 @@
+[package]
+name = "courseinfo-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+courseinfo-core = { path = "../courseinfo-core" }
+worker = { version = "=0.8.7", features = ["d1"] }
+serde.workspace = true
+serde_json.workspace = true
+futures-util = "0.3"

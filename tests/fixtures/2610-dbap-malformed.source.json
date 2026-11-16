@@ -1,0 +1,8 @@
+{
+  "source_url": "https://w5.ab.ust.hk/wcq/cgi-bin/2610/subject/DBAP",
+  "captured_at_utc": "2026-10-23T01:22:53.911082+00:00",
+  "source_bytes": 207100,
+  "source_sha256": "365f66cad2ee1762675ff02a9d69bf33c57503955736102796e3076907f781f9",
+  "minimization": "Retained original title, selected term, all department links, the malformed course at original UTF-8 byte range [64503,66808), diffMsg, terminal script/body/html. No course entry mutated.",
+  "expected": "Reject captured page: source course anchor is empty and subject is \"  -  ()\". This is observed transient upstream invalid data, not an empty department."
+}

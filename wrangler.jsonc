@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "courseinfo-local",
+  "main": "build/index.js",
+  "base_dir": "build",
+  "compatibility_date": "2026-09-28",
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "rules": [
+    { "type": "ESModule", "globs": ["index.js"], "fallthrough": false },
+    { "type": "CompiledWasm", "globs": ["index_bg.wasm"], "fallthrough": false }
+  ],
+  "limits": { "cpu_ms": 300000 },
+  "vars": {
+    "BASE_URL": "https://w5.ab.ust.hk/wcq/cgi-bin",
+    "WORKER_NAME": "courseinfo-local",
+    "FETCH_TIMEOUT_MS": "30000",
+    "REFRESH_TIMEOUT_MS": "720000"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "courseinfo-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "COURSE_MISS_LIMITER",
+      "namespace_id": "14389001",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
+  "triggers": { "crons": ["0 19 * * SUN"] }
+}

@@ -1,0 +1,231 @@
+{
+  "semester": "2610",
+  "department": "COMP",
+  "departments": [
+    "ACCT",
+    "AESF",
+    "AIAA",
+    "AISC",
+    "AMAT",
+    "AMCC",
+    "ARIN",
+    "BEHI",
+    "BIBU",
+    "BIEN",
+    "BSBE",
+    "BTEC",
+    "CENG",
+    "CHEM",
+    "CHMS",
+    "CIEM",
+    "CIVL",
+    "CMAA",
+    "COMP",
+    "CPEG",
+    "CSIT",
+    "DASC",
+    "DBAB",
+    "DBAP",
+    "DISC",
+    "DRAP",
+    "DSAA",
+    "DSCT",
+    "ECON",
+    "EEMT",
+    "EESM",
+    "ELBT",
+    "ELEC",
+    "EMIA",
+    "ENEG",
+    "ENGG",
+    "ENTR",
+    "ENVR",
+    "ENVS",
+    "EVNG",
+    "EVSM",
+    "FINA",
+    "FOFB",
+    "GBUS",
+    "GFIN",
+    "GNED",
+    "HMAW",
+    "HMMA",
+    "HUMA",
+    "IBTM",
+    "IEDA",
+    "IIMP",
+    "IMBA",
+    "INTR",
+    "IPEN",
+    "ISDN",
+    "ISOM",
+    "JEVE",
+    "LANG",
+    "LIFS",
+    "MAED",
+    "MAFS",
+    "MAIE",
+    "MARK",
+    "MASS",
+    "MATE",
+    "MATH",
+    "MCEE",
+    "MECH",
+    "MESF",
+    "MFIT",
+    "MGCS",
+    "MGMT",
+    "MICS",
+    "MILE",
+    "MIMT",
+    "MSBD",
+    "MSDM",
+    "MSPY",
+    "MTLE",
+    "NANO",
+    "OCES",
+    "PDEV",
+    "PHYS",
+    "PPOL",
+    "RMBI",
+    "ROAS",
+    "SBMT",
+    "SCIE",
+    "SEEN",
+    "SHSS",
+    "SMMG",
+    "SOSC",
+    "SUST",
+    "TEMG",
+    "UGOD",
+    "UPOP",
+    "UROP",
+    "UTOP",
+    "WBBA"
+  ],
+  "courses": {
+    "COMP1021": {
+      "code": "COMP1021",
+      "title": "Introduction to Computer Science",
+      "credits": 3.0,
+      "instructors": {
+        "BENSAOU, Brahim": [
+          "L2"
+        ],
+        "BIE, Yequan": [
+          "LA1"
+        ],
+        "CHAN, Cecia Ki": [
+          "L3"
+        ],
+        "CHEN, Qiaoyi": [
+          "LA2"
+        ],
+        "DONG, Shaocong": [
+          "LA3"
+        ],
+        "GU, Bohai": [
+          "LA3"
+        ],
+        "HE, Guangxin": [
+          "LA1"
+        ],
+        "HUANG, Yuchen": [
+          "LA4"
+        ],
+        "LAM, Gibson": [
+          "L1"
+        ],
+        "LI, Haoxi": [
+          "LA1"
+        ],
+        "LIANG, Danxuan": [
+          "LA1"
+        ],
+        "LIU, Jinfeng": [
+          "LA4"
+        ],
+        "LIU, Weiying": [
+          "LA4"
+        ],
+        "LUO, Hongyu": [
+          "LA2"
+        ],
+        "MI, Jiazhi": [
+          "LA2"
+        ],
+        "MIN, Rui": [
+          "LA3"
+        ],
+        "QIU, Zipeng": [
+          "LA4"
+        ],
+        "USMAN, Muhammad": [
+          "LA1",
+          "LA2",
+          "LA3",
+          "LA4"
+        ],
+        "WONG, William": [
+          "LA1",
+          "LA2",
+          "LA3",
+          "LA4"
+        ],
+        "YAN, Ran": [
+          "LA2"
+        ],
+        "ZHANG, Hualei": [
+          "LA3"
+        ],
+        "ZHANG, Jie": [
+          "L4"
+        ],
+        "ZHAO, Bolin": [
+          "LA2"
+        ]
+      },
+      "sections": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "LA1",
+        "LA2",
+        "LA3",
+        "LA4"
+      ]
+    },
+    "COMP4900": {
+      "code": "COMP4900",
+      "title": "Academic and Professional Development",
+      "credits": 0.0,
+      "instructors": {
+        "HAGHIGHI, Arman": [
+          "T1",
+          "T2",
+          "T3"
+        ],
+        "WAN, Him Ting": [
+          "T1",
+          "T2",
+          "T3"
+        ]
+      },
+      "sections": [
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    "COMP7990": {
+      "code": "COMP7990",
+      "title": "Doctoral Thesis Research",
+      "credits": 0.0,
+      "instructors": {},
+      "sections": [
+        "R1"
+      ]
+    }
+  }
+}
