@@ -289,8 +289,6 @@ fn valid_department(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|b| b.is_ascii_uppercase())
 }
 
-const TERMINAL_SCRIPT: &str =
-    "<script src=\"/wcq/cgi-bin/msg.php?callback=showAlertMsg\"></script>";
 const UPDATE_MESSAGE: &str =
     "The class information on this page will normally be updated every 15 to 20 minutes.";
 
@@ -300,15 +298,17 @@ pub fn parse_department(html: &str, semester: &str, department: &str) -> Result<
     if !valid_department(department) {
         return Err(Error::InvalidDepartment);
     }
-    // html5ever repairs missing closers, so only original response bytes prove completion.
-    let tail = html
+    // html5ever repairs missing closers. Check the original ending, not the script's source.
+    if html
         .trim_end()
         .strip_suffix("</html>")
         .and_then(|s| s.trim_end().strip_suffix("</body>"))
-        .and_then(|s| s.trim_end().strip_suffix(TERMINAL_SCRIPT))
-        .ok_or_else(|| invalid_page("missing original terminal script/body/html evidence"))?;
-    if !tail.contains("</div>") {
-        return Err(invalid_page("missing completed content"));
+        .and_then(|s| s.trim_end().strip_suffix("</script>"))
+        .is_none()
+    {
+        return Err(invalid_page(
+            "missing original terminal script/body/html evidence",
+        ));
     }
     let selectors = &*SELECTORS;
     let document = Html::parse_document(html);
@@ -501,7 +501,7 @@ fn parse_course(
             }
             continue;
         }
-        // Only fixture-established mobile duplicates may bypass desktop parsing.
+        // The mobile detail row duplicates the desktop section.
         if row
             .value()
             .classes()
@@ -519,21 +519,31 @@ fn parse_course(
             .value()
             .classes()
             .any(|class| class == "mobileInstructorRow");
-        let cell_count = if mobile_instructor { 9 } else { 10 };
+        if mobile_instructor || row.value().classes().any(|class| class == "otherRow") {
+            // Continuation meetings and mobile duplicates do not define new sections.
+            // Mobile instructor rows have an extra cell when TAs are displayed.
+            let cell_count = children.try_fold(1, |count, cell| {
+                (count < 10 && cell.value().name() == "td").then_some(count + 1)
+            });
+            let valid_cell_count =
+                cell_count == Some(10) || (mobile_instructor && cell_count == Some(9));
+            if sections.is_empty()
+                || first.value().name() != "td"
+                || first.text().any(|part| !part.trim().is_empty())
+                || !valid_cell_count
+            {
+                return Err(invalid_page("malformed supplemental section row"));
+            }
+            continue;
+        }
         let mut cells = [first; 10];
-        for cell in &mut cells[1..cell_count] {
+        for cell in &mut cells[1..] {
             *cell = children
                 .next()
                 .ok_or_else(|| invalid_page("incomplete section row"))?;
         }
         if children.next().is_some() || cells.iter().any(|c| c.value().name() != "td") {
             return Err(invalid_page("malformed section row"));
-        }
-        if mobile_instructor {
-            if first.text().any(|part| !part.trim().is_empty()) {
-                return Err(invalid_page("malformed mobile instructor row"));
-            }
-            continue;
         }
         if !row.value().classes().any(|class| class == "newsect")
             || !row.value().classes().any(|class| class == "mainRow")
