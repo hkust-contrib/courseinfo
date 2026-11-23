@@ -63,12 +63,14 @@ closed rather than erasing cached data.
 The parser removes only the final credits suffix. Parentheses within the course
 title and fractional credits are preserved. Inline element boundaries do not
 introduce spaces: only actual source whitespace is collapsed across text nodes.
-One malformed course invalidates its department replacement. Original-body
-completion evidence, page identity, term, course anchors, section structure,
-and discovery links are checked before publication. Unclassified table rows
-are rejected rather than silently dropping sections; only recognized header
-and mobile-duplicate rows are skipped. A challenge page or truncated 200
-response is not empty success.
+One malformed course invalidates its department replacement. The update footer
+and explicit `</script>`, `</body>`, and `</html>` at the end of the original
+response provide completion evidence; the script URL and contents are not
+checked. Page identity, term, course anchors, section structure, and discovery
+links are also checked before publication. Instructor mappings come from the
+desktop section rows, not continuation meetings or mobile duplicates.
+Unclassified table rows are rejected rather than silently dropping sections.
+A challenge page or truncated 200 response is not empty success.
 
 ## Semesters
 

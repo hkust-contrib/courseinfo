@@ -172,18 +172,44 @@ fn original_mobile_nested_tables_do_not_duplicate_sections_or_headings() {
     let start = source.find("<tr class=\"mobileInstructorRow\">").unwrap();
     let end = start + source[start..].find("</tr>").unwrap() + 5;
     let mobile_instructor = &source[start..end];
-    let desktop_end = IMBA.find("</tr>").unwrap();
+    let desktop_start = IMBA.find("L1 (4768)").unwrap();
+    let desktop_end = desktop_start + IMBA[desktop_start..].find("</tr>").unwrap() + "</tr>".len();
     let html = format!(
         "{}{}{}{}",
-        &IMBA[..desktop_end + 5],
+        &IMBA[..desktop_end],
         mobile,
         mobile_instructor,
-        &IMBA[desktop_end + 5..]
+        &IMBA[desktop_end..]
     );
     assert_eq!(
         parse_department(&html, "2610", "IMBA").unwrap().courses,
         parse_department(IMBA, "2610", "IMBA").unwrap().courses
     );
+}
+
+#[test]
+fn supplemental_section_rows_preserve_course_mappings() {
+    let expected: Expected = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/2610-comp.expected.json"
+    ))
+    .unwrap();
+    let mut html = COMP.to_owned();
+    for (section, supplemental_row) in [
+        (
+            "L1 (2225)",
+            include_str!("../../../tests/fixtures/2610-comp1021-continuation-row.html"),
+        ),
+        (
+            "LA1 (2233)",
+            include_str!("../../../tests/fixtures/2610-comp1021-mobile-instructor-row.html"),
+        ),
+    ] {
+        let start = html.find(section).unwrap();
+        let end = start + html[start..].find("</tr>").unwrap() + "</tr>".len();
+        html.insert_str(end, supplemental_row);
+    }
+    let page = parse_department(&html, "2610", "COMP").unwrap();
+    assert_eq!(page.courses, expected.courses);
 }
 
 #[test]
@@ -341,6 +367,31 @@ fn truncated_original_bodies_fail_even_at_complete_course_boundaries() {
 }
 
 #[test]
+fn inline_terminal_script_still_requires_original_document_closers() {
+    let html = COMP.replace(
+        r#"<script src="/wcq/cgi-bin/msg.php?callback=showAlertMsg"></script>"#,
+        concat!(
+            "</div>\n<script type=\"text/javascript\">\n",
+            "$(document).ready(function () {\n",
+            "\t$(window).scroll(function (event) {\n",
+            "\t\t$('#navigator').css('left',-($(this).scrollLeft()));\n",
+            "\t});\n});\n</script>",
+        ),
+    );
+    let expected = parse_department(COMP, "2610", "COMP").unwrap();
+    let page = parse_department(&html, "2610", "COMP").unwrap();
+    assert_eq!(page.courses, expected.courses);
+    assert_eq!(page.departments, expected.departments);
+    for closer in ["</script>", "</body>", "</html>"] {
+        let position = html.rfind(closer).unwrap();
+        assert!(
+            parse_department(&html[..position], "2610", "COMP").is_err(),
+            "truncation before {closer}"
+        );
+    }
+}
+
+#[test]
 fn one_malformed_course_prevents_publishing_every_course_in_the_department() {
     for html in [
         COMP.replace(
@@ -362,6 +413,7 @@ fn one_malformed_course_prevents_publishing_every_course_in_the_department() {
         COMP.replace("newsect secteven mainRow", "secteven mainRow"),
         COMP.replace("newsect secteven mainRow", "newsect secteven"),
         COMP.replace("newsect secteven mainRow", "secteven"),
+        COMP.replace("newsect secteven mainRow", "secteven otherRow"),
         COMP.replace("newsect secteven mainRow", "mobileViewDetail"),
         COMP.replace("newsect secteven mainRow", "mobileInstructorRow"),
         COMP.replacen("<td >L1 (2225)</td>", "", 1),
