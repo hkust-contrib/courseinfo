@@ -8,7 +8,7 @@ activate production code alongside Terraform.
 
 - Rust 1.99.1 and `wasm32-unknown-unknown`, pinned in `rust-toolchain.toml`.
 - worker/worker-build 0.8.7; Cargo dependencies locked.
-- Node 24, Bun 1.4.3, Wrangler 4.137.0, Vitest 3.2.4; JavaScript dependencies locked.
+- Node 24, Bun 1.4.3, Wrangler 4.137.0, Vitest 4.1.12; JavaScript dependencies locked.
 - Terraform 1.9.8 and Cloudflare provider 5.23.0.
 - Compatibility date **2026-09-28**, matching the maximum supported by the pinned
   local workerd. Terraform and Wrangler must match; a newer calendar date is not
